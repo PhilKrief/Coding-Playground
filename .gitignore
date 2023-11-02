@@ -1,0 +1,5 @@
+*.csv
+*xlsx
+old.py
+Screener.py
+/venv
