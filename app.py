@@ -6,7 +6,7 @@ pd.set_option('display.max_columns', 15)
 # Set your Financial Modelling Prep API key here
 API_KEY = 'd8eabf9ca1dec61aceefd4b4a9b93992'
 
-def fetch_financial_data(ticker, limit=12):  # Fetch more than four quarters, e.g., 12
+def fetch_financial_data(ticker, limit=100):  # Fetch more than four quarters, e.g., 12
     # Define the URLs for the Income Statement and Cash Flow Statement
     income_statement_url = f"https://financialmodelingprep.com/api/v3/income-statement/{ticker}?period=quarter&limit={limit}&apikey={API_KEY}"
     cash_flow_statement_url = f"https://financialmodelingprep.com/api/v3/cash-flow-statement/{ticker}?period=quarter&limit={limit}&apikey={API_KEY}"
@@ -82,10 +82,12 @@ if ticker_symbol:
     if financial_data is not None and market_cap_data is not None:
         # Let the user select a date
         date_options = financial_data['date'].unique()
-        selected_date = st.selectbox('Select the date for TTM FFO calculation:', options=date_options)
+        #flip the order of the dates
+        date_options = date_options[::-1]
+        selected_date = st.selectbox('Select the date for TTM FFO calculation:', options=date_options[:(len(date_options)-50)])
 
         # Match the market cap to the selected date, or use the most recent if the selected date is the most recent
-        if selected_date == date_options[len(date_options)-1]:  # Assuming the first option is the most recent
+        if selected_date == date_options[0]:  # Assuming the first option is the most recent
             selected_market_cap = market_cap_data['marketCap'].iloc[0]
         else:
             # Find the market cap closest to the selected date
