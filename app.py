@@ -50,8 +50,7 @@ def calculate_ttm_ffo(financial_data, selected_date):
     
     # Calculate the TTM FFO by summing the FFO of the four quarters trailing the selected date
     ttm_ffo = financial_data['FFO'].iloc[selected_index-3:selected_index+1].sum()
-    print(financial_data[['date', 'FFO', 'netIncome', 'depreciationAndAmortization', 'netCashUsedForInvestingActivites']])
-    print(financial_data['FFO'].iloc[selected_index-3:selected_index+1])
+
     return ttm_ffo
 
 def fetch_daily_market_cap_dataframe(api_key, symbol):
@@ -93,7 +92,7 @@ if ticker_symbol:
             # Find the market cap closest to the selected date
             market_cap_data['date_diff'] = (pd.to_datetime(selected_date) - market_cap_data['date']).abs()
             selected_market_cap = market_cap_data.loc[market_cap_data['date_diff'].idxmin(), 'marketCap']
-            print(selected_market_cap)
+       
 
         if st.button('Calculate FFO and Price/FFO'):
             # Calculate the FFO
