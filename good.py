@@ -59,32 +59,23 @@ def calculate_ttm_ffo(financial_data, selected_date):
 
     return ttm_ffo
 
-def calculate_estimated_ttm_ffo(financial_data, selected_date):
-    # Find the index of the selected date
-    
-    selected_index = financial_data[financial_data['date'] == selected_date].index.item()
-
-    # Calculate the FFO for each quarter
-    financial_data['FFO'] = financial_data['netIncome'] + \
-                            financial_data['depreciationAndAmortization'] + \
-                            financial_data['netCashUsedForInvestingActivites']
-    
-    # Calculate the TTM FFO by summing the FFO of the four quarters trailing the selected date
-    ttm_ffo = financial_data['FFO'].iloc[selected_index].sum()
-
-    return ttm_ffo
-
-
-def calculate_average_percentage_change(financial_data, metric):
-
-    ttm_metrics = financial_data[['netIncome', 'depreciationAndAmortization', 'netCashUsedForInvestingActivites']].rolling(window=4).sum()
-    ttm_metrics[['revenue', 'totalAssets']] = financial_data[['revenue', 'totalAssets']]
-    # Calculate the TTM metric as a percentage of the chosen metric
-    ttm_metrics_percentage = ttm_metrics.div(ttm_metrics[metric], axis=0) * 100
-    # Calculate the average percentage
-    average_percentage = ttm_metrics_percentage.rolling(window=4).mean()
-    print("test")
-
+def calculate_forward_looking_estimate(financial_data, metric, ttm="Yes"):
+    if ttm == "Yes":
+        ttm_metrics = financial_data[['netIncome', 'depreciationAndAmortization', 'netCashUsedForInvestingActivites']].rolling(window=4).sum()
+        ttm_metrics[['revenue', 'totalAssets']] = financial_data[['revenue', 'totalAssets']]
+        # Calculate the TTM metric as a percentage of the chosen metric
+        ttm_metrics_percentage = ttm_metrics.div(ttm_metrics[metric], axis=0) * 100
+        # Calculate the average percentage
+        average_percentage = ttm_metrics_percentage.rolling(window=4).mean()
+        print("test")
+    else:
+        ttm_metrics = financial_data[['netIncome', 'depreciationAndAmortization', 'netCashUsedForInvestingActivites']]
+        ttm_metrics[['revenue', 'totalAssets']] = financial_data[['revenue', 'totalAssets']]
+        # Calculate the TTM metric as a percentage of the chosen metric
+        ttm_metrics_percentage = ttm_metrics.div(ttm_metrics[metric], axis=0) * 100
+        # Calculate the average percentage
+        average_percentage = ttm_metrics_percentage
+        print("test")
 
     #print(ttm_metrics)
     #print(ttm_metrics_percentage)
@@ -92,88 +83,61 @@ def calculate_average_percentage_change(financial_data, metric):
 
     return average_percentage
 
-def estimate_next_year_growth(average_percentage_df):
-
+def estimate_next_quarter_ffo(average_percentage_df,financial_data, ttm="Yes"):
+    if ttm == "Yes":
         # Calculate quarter-over-quarter percentage change
-    qoq_change = average_percentage_df.pct_change()
-    #print(qoq_change)
+        qoq_change = average_percentage_df.pct_change()
+        #print(qoq_change)
 
-    # Calculate the average percentage change for each component
-    avg_yoy_change = qoq_change.rolling(window=4).mean()
-    return avg_yoy_change
+        # Calculate the average percentage change for each component
+        avg_qoq_change = qoq_change.rolling(window=4).mean()
 
-def estimate_next_year_metrics(average_percentage_df,financial_data, avg_yoy_change, allow_input = False):
-    # Divide the annual growth rate by 4 to get the estimated quarterly growth rate
-    # Check if user input is allowed
-    if allow_input:
-        quarterly_growth_rate =  avg_yoy_change.iloc[-1] * 100
+        # Get the most recent quarter's data (assuming the last row is the most recent quarter)
+        last_quarter_data = average_percentage_df.iloc[-1]
 
-        # Initialize an empty dictionary to store user inputs
-        growth_inputs = {}
+        # Calculate the estimated values for the next quarter by applying the average percentage change
         
-        # Use Streamlit's number_input to get user input for each metric's growth rate
-        for metric in ['netIncome', 'depreciationAndAmortization', 'netCashUsedForInvestingActivites', 'revenue', 'totalAssets']:
-           # Set the default value as the last YoY growth rate for the metric
-            default_growth_rate = quarterly_growth_rate.get(metric, 0.0)
-            
-            # Collect user input with the default value set
-            user_input = st.sidebar.number_input(
-                f'Enter the estimated annual growth rate for {metric} (%)',
-                min_value=-100.0,
-                value=default_growth_rate,
-                step=0.1,
-                format='%.2f'
-            )
-            growth_inputs[metric] = user_input / 100 
-        quarterly_growth_rate = pd.Series(growth_inputs) /4 +1
-    
+        estimated_next_quarter = (1 + avg_qoq_change.iloc[-1]) * last_quarter_data
+        print(estimated_next_quarter)
+        estimated_values_scaled =estimated_next_quarter*financial_data.loc[len(financial_data)-1, "totalAssets"] / 100
     else:
-        print(avg_yoy_change.iloc[-1])
-        quarterly_growth_rate = (1 + avg_yoy_change / 4).iloc[-1]
-        print(quarterly_growth_rate)
+        # Calculate quarter-over-quarter percentage change
+        qoq_change = average_percentage_df.pct_change(4)
+        #print(qoq_change)
 
-    # Initialize the DataFrame to store the new rows
-    new_rows = []
+        # Calculate the average percentage change for each component
+        avg_qoq_change = qoq_change
+
+        # Get the most recent quarter's data (assuming the last row is the most recent quarter)
+        last_quarter_data = average_percentage_df.iloc[-1]
+
+        # Calculate the estimated values for the next quarter by applying the average percentage change
+        
+        estimated_next_quarter = (1 + avg_qoq_change.iloc[-1]) * last_quarter_data
+        
+        estimated_values_scaled =estimated_next_quarter*financial_data.loc[len(financial_data)-1, "totalAssets"] / 100
+
+    # Create a new DataFrame with the estimated values for the next quarter
+    new_row = pd.DataFrame([estimated_values_scaled], columns=average_percentage_df.columns)
+
+    financial_data['date'] = pd.to_datetime(financial_data['date'])
     
-    # Get the most recent quarter's data (assuming the last row is the most recent quarter)
-    last_quarter_data = average_percentage_df
+    # Get the last date from the 'date' column
+    last_date = financial_data['date'].iloc[-1]
+    
+    # Add 3 months to the last date
+    new_date = last_date + DateOffset(months=3)
 
-    for i in range(1, 5):
-        print(i)
-        # Calculate the estimated values for the next quarter
-        estimated_values = (quarterly_growth_rate ** i) * last_quarter_data
-        print(estimated_values.iloc[-1])
-        # Scale the estimated values
-        estimated_values_scaled = estimated_values.iloc[-1] * financial_data.loc[len(financial_data) - 1, "totalAssets"] / 100
-        print("HERERERE")
-        #print(last_quarter_data)
-        #print(estimated_values_scaled.shape)
-        #print(average_percentage_df.columns)
-        # Create a new DataFrame row with the estimated values
-        new_row = estimated_values_scaled.to_frame().transpose()
-        #print(new_row)
-
-        # Calculate the new date, adding 3 months for each future quarter
-        # Ensure 'date' in financial_data is a datetime object
-        financial_data['date'] = pd.to_datetime(financial_data['date'])
-
-        # Now you can add the DateOffset
-        new_date = financial_data['date'].iloc[-1] + DateOffset(months=3 * i)
-        #print(new_date)
+    # Assign the new date to the new_row 'date' column
+    new_row['date'] = new_date
 
 
-        # Assign the new date to the new_row 'date' column
-        new_row['date'] = new_date
-        #print(new_row)
-        # Append the new row to the list of new_rows
-        new_rows.append(new_row)
+    # Append the new_row to the financial_data DataFrame
+    updated_financial_data = financial_data.append(new_row, ignore_index=True)
 
-    # Concatenate the new rows with the original financial_data DataFrame
-    #print(new_rows)
-    updated_financial_data = pd.concat([financial_data] + new_rows, ignore_index=True)
-   
-    return updated_financial_data
-
+    print(updated_financial_data[['date','netIncome','depreciationAndAmortization','netCashUsedForInvestingActivites']])
+  
+    return  updated_financial_data
 
 def fetch_daily_market_cap_dataframe(api_key, symbol):
     url = f"https://financialmodelingprep.com/api/v3/historical-market-capitalization/{symbol}?limit=6000&apikey={api_key}"
@@ -188,15 +152,11 @@ def fetch_daily_market_cap_dataframe(api_key, symbol):
     market_cap_df = market_cap_df[['date', 'marketCap']]
     market_cap_df['date'] = pd.to_datetime(market_cap_df['date'])
     return market_cap_df
-
-
 # Initialize the Streamlit app
 st.title('REIT Valuation Model')
 
 # User input for the ticker symbol
 ticker_symbol = st.text_input('Enter the ticker symbol of the REIT:', '')
-allow_input = st.sidebar.checkbox('Allow user input for growth rates', value=False)
-
 
 if ticker_symbol:
     # Fetch the financial data for the given ticker symbol
@@ -220,11 +180,6 @@ if ticker_symbol:
             selected_market_cap = market_cap_data.loc[market_cap_data['date_diff'].idxmin(), 'marketCap']
        
 
-        averages = calculate_average_percentage_change(financial_data, "totalAssets")
-        yearly_growth = estimate_next_year_growth(averages)
-        updated_financial_data = estimate_next_year_metrics(averages,financial_data, yearly_growth, allow_input)
-        
-        #print(updated_financial_data)
         if st.button('Calculate FFO and Price/FFO'):
             # Calculate the FFO
             ffo = calculate_ttm_ffo(financial_data, selected_date)
@@ -235,11 +190,53 @@ if ticker_symbol:
             # Display the FFO and Price/FFO ratio
             st.write(f"The FFO for {ticker_symbol} on a TTM basis starting from {selected_date} is: ${ffo:,.2f}")
             st.write(f"The Price/FFO ratio for {ticker_symbol} as of {selected_date} is: {price_ffo_ratio:.2f}")
+            averages = calculate_forward_looking_estimate(financial_data, "totalAssets")
+            updated_financial_data = estimate_next_quarter_ffo(averages,financial_data)
             
-            estimated_ffo = calculate_estimated_ttm_ffo(updated_financial_data, updated_financial_data['date'].iloc[-1])
+            
+            estimated_ffo = calculate_ttm_ffo(updated_financial_data, updated_financial_data['date'].iloc[-1])
             st.write(estimated_ffo)
     else:
         st.error('No financial data found for the given ticker symbol.')
 else:
     st.error('Please enter a ticker symbol.')
 
+
+
+
+def estimate_next_year_metrics(average_percentage_df,financial_data, avg_yoy_change):
+    # Divide the annual growth rate by 4 to get the estimated quarterly growth rate
+    quarterly_growth_rate = (1 + avg_yoy_change / 4)
+
+    # Initialize the DataFrame to store the new rows
+    new_rows = []
+    
+    # Get the most recent quarter's data (assuming the last row is the most recent quarter)
+    last_quarter_data = average_percentage_df.iloc[-1]
+
+    # Calculate the estimated values for the next quarter by applying the average percentage change
+    
+    estimated_next_quarter = (1 + avg_yoy_change.iloc[-1]) * last_quarter_data
+ 
+    estimated_values_scaled =estimated_next_quarter*financial_data.loc[len(financial_data)-1, "totalAssets"] / 100
+    
+    # Create a new DataFrame with the estimated values for the next quarter
+    new_row = pd.DataFrame([estimated_values_scaled], columns=average_percentage_df.columns)
+
+    financial_data['date'] = pd.to_datetime(financial_data['date'])
+    
+    # Get the last date from the 'date' column
+    last_date = financial_data['date'].iloc[-1]
+    
+    # Add 3 months to the last date
+    new_date = last_date + DateOffset(months=3)
+
+    # Assign the new date to the new_row 'date' column
+    new_row['date'] = new_date
+
+
+    # Append the new_row to the financial_data DataFrame
+    updated_financial_data = financial_data.append(new_row, ignore_index=True)
+
+
+    return  updated_financial_data
