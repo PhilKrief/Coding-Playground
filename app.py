@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 from pandas.tseries.offsets import DateOffset
 from io import BytesIO
-
+import plotly.graph_objs as go
 
 pd.set_option('display.max_columns', 15)
 # Set your Financial Modelling Prep API key here
@@ -59,22 +59,6 @@ def calculate_ttm_ffo(financial_data, selected_date):
     ttm_ffo = financial_data['FFO'].iloc[selected_index-3:selected_index+1].sum()
 
     return ttm_ffo
-
-def calculate_estimated_ttm_ffo(financial_data, selected_date):
-    # Find the index of the selected date
-    
-    selected_index = financial_data[financial_data['date'] == selected_date].index.item()
-
-    # Calculate the FFO for each quarter
-    financial_data['FFO'] = financial_data['netIncome'] + \
-                            financial_data['depreciationAndAmortization'] + \
-                            financial_data['netCashUsedForInvestingActivites']
-    
-    # Calculate the TTM FFO by summing the FFO of the four quarters trailing the selected date
-    ttm_ffo = financial_data['FFO'].iloc[selected_index].sum()
-
-    return ttm_ffo
-
 
 def calculate_average_percentage_change(financial_data, metric):
 
@@ -157,8 +141,6 @@ def estimate_next_year_metrics(average_percentage_df,financial_data, avg_yoy_cha
         # Now you can add the DateOffset
         new_date = financial_data['date'].iloc[-1] + DateOffset(months=3 * i)
 
-
-
         # Assign the new date to the new_row 'date' column
         new_row['date'] = new_date
 
@@ -170,6 +152,21 @@ def estimate_next_year_metrics(average_percentage_df,financial_data, avg_yoy_cha
     updated_financial_data = pd.concat([financial_data] + new_rows, ignore_index=True)
    
     return updated_financial_data
+
+def calculate_estimated_ttm_ffo(financial_data, selected_date):
+    # Find the index of the selected date
+    
+    selected_index = financial_data[financial_data['date'] == selected_date].index.item()
+
+    # Calculate the FFO for each quarter
+    financial_data['FFO'] = financial_data['netIncome'] + \
+                            financial_data['depreciationAndAmortization'] + \
+                            financial_data['netCashUsedForInvestingActivites']
+    
+    # Calculate the TTM FFO by summing the FFO of the four quarters trailing the selected date
+    ttm_ffo = financial_data['FFO'].iloc[selected_index].sum()
+
+    return ttm_ffo
 
 
 def fetch_daily_market_cap_dataframe(api_key, symbol):
@@ -187,7 +184,6 @@ def fetch_daily_market_cap_dataframe(api_key, symbol):
     return market_cap_df
 
 
-
 # Function to convert the DataFrame to an Excel byte stream
 def to_excel(df):
     output = BytesIO()
@@ -197,8 +193,48 @@ def to_excel(df):
     processed_data = output.getvalue()
     return processed_data
 
-# Create a button to download the data
 
+# Function to create a Plotly two-line chart
+def create_two_line_chart(df, column1, column2, title):
+    fig = go.Figure()
+
+    # Add first trace with the primary y-axis
+    fig.add_trace(go.Scatter(x=df['date'], y=df[column1], mode='lines', name=column1))
+
+    # Add second trace with the secondary y-axis
+    fig.add_trace(go.Scatter(x=df['date'], y=df[column2], mode='lines', name=column2, yaxis='y2'))
+
+    # Update layout with two y-axes
+    fig.update_layout(
+        title=title,
+        xaxis_title='Time',
+        yaxis=dict(
+            title=column1
+        ),
+        yaxis2=dict(
+            title=column2,
+            overlaying='y',
+            side='right'
+        )
+    )
+
+    return fig
+
+
+# Function to plot Depreciation & Amortization and Total Assets over time
+def plot_depreciation_and_total_assets(df):
+    title = 'Depreciation & Amortization and Total Assets Over Time'
+    return create_two_line_chart(df, 'depreciationAndAmortization', 'totalAssets', title)
+
+# Function to plot Net Income and Total Assets over time
+def plot_net_income_and_total_assets(df):
+    title = 'Net Income and Total Assets Over Time'
+    return create_two_line_chart(df, 'netIncome', 'totalAssets', title)
+
+# Function to plot Net Cash Used for Investing Activities and Total Assets over time
+def plot_net_cash_and_total_assets(df):
+    title = 'Net Cash Used for Investing Activities and Total Assets Over Time'
+    return create_two_line_chart(df, 'netCashUsedForInvestingActivites', 'totalAssets', title)
 
 
 
@@ -236,19 +272,23 @@ if ticker_symbol:
         yearly_growth = estimate_next_year_growth(averages)
         updated_financial_data = estimate_next_year_metrics(averages,financial_data, yearly_growth, allow_input)
         
-        if st.button('Calculate FFO and Price/FFO'):
+        #if st.button('Calculate FFO and Price/FFO'):
             # Calculate the FFO
-            ffo = calculate_ttm_ffo(financial_data, selected_date)
+        ffo = calculate_ttm_ffo(financial_data, selected_date)
 
-            # Calculate Price/FFO ratio
-            price_ffo_ratio = selected_market_cap / ffo
+        # Calculate Price/FFO ratio
+        price_ffo_ratio = selected_market_cap / ffo
 
-            # Display the FFO and Price/FFO ratio
-            st.write(f"The FFO for {ticker_symbol} on a TTM basis starting from {selected_date} is: ${ffo:,.2f}")
-            st.write(f"The Price/FFO ratio for {ticker_symbol} as of {selected_date} is: {price_ffo_ratio:.2f}")
-            
-            estimated_ffo = calculate_estimated_ttm_ffo(updated_financial_data, updated_financial_data['date'].iloc[-1])
-            st.write(f"The FFO for {ticker_symbol} on a 1 year forward looking basis, using the estimates in the sidebar, starting from {selected_date} is: ${estimated_ffo:,.2f}")
+        # Display the FFO and Price/FFO ratio
+        st.write(f"The FFO for {ticker_symbol} on a TTM basis starting from {selected_date} is: ${ffo:,.2f}")
+        st.write(f"The Price/FFO ratio for {ticker_symbol} as of {selected_date} is: {price_ffo_ratio:.2f}")
+        
+        estimated_ffo = calculate_estimated_ttm_ffo(updated_financial_data, updated_financial_data['date'].iloc[-1])
+        st.write(f"The FFO for {ticker_symbol} on a 1 year forward looking basis, using the estimates in the sidebar, starting from {selected_date} is: ${estimated_ffo:,.2f}")
+        st.plotly_chart(create_two_line_chart(financial_data, 'depreciationAndAmortization', 'totalAssets', 'Depreciation & Amortization and Total Assets Over Time'))
+        st.plotly_chart(create_two_line_chart(financial_data, 'netIncome', 'totalAssets', 'Net Income and Total Assets Over Time'))
+        st.plotly_chart(create_two_line_chart(financial_data, 'netCashUsedForInvestingActivites', 'totalAssets', 'Net Cash Used for Investing Activities and Total Assets Over Time'))
+        
         if st.button('Download Data as Excel'):
             tmp_download_link = to_excel(financial_data)
             st.download_button(label='📥 Download Current Result',
