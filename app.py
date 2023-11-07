@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 from pandas.tseries.offsets import DateOffset
+from io import BytesIO
 
 
 pd.set_option('display.max_columns', 15)
@@ -83,21 +84,12 @@ def calculate_average_percentage_change(financial_data, metric):
     ttm_metrics_percentage = ttm_metrics.div(ttm_metrics[metric], axis=0) * 100
     # Calculate the average percentage
     average_percentage = ttm_metrics_percentage.rolling(window=4).mean()
-    print("test")
-
-
-    #print(ttm_metrics)
-    #print(ttm_metrics_percentage)
-    #print(average_percentage)
-
     return average_percentage
 
 def estimate_next_year_growth(average_percentage_df):
 
         # Calculate quarter-over-quarter percentage change
     qoq_change = average_percentage_df.pct_change()
-    #print(qoq_change)
-
     # Calculate the average percentage change for each component
     avg_yoy_change = qoq_change.rolling(window=4).mean()
     return avg_yoy_change
@@ -128,48 +120,47 @@ def estimate_next_year_metrics(average_percentage_df,financial_data, avg_yoy_cha
         quarterly_growth_rate = pd.Series(growth_inputs) /4 +1
     
     else:
-        print(avg_yoy_change.iloc[-1])
         quarterly_growth_rate = (1 + avg_yoy_change / 4).iloc[-1]
-        print(quarterly_growth_rate)
+
 
     # Initialize the DataFrame to store the new rows
     new_rows = []
     
     # Get the most recent quarter's data (assuming the last row is the most recent quarter)
-    last_quarter_data = average_percentage_df
+    ttm_metrics = financial_data[['netIncome', 'depreciationAndAmortization', 'netCashUsedForInvestingActivites']].rolling(window=4).sum()
+    ttm_metrics[['revenue', 'totalAssets']] = financial_data[['revenue', 'totalAssets']]
+    # Calculate the TTM metric as a percentage of the chosen metric
+    ttm_metrics_percentage = ttm_metrics.div(ttm_metrics[metric], axis=0) * 100
+    # Calculate the average percentage
+    last_quarter_data = ttm_metrics_percentage
 
     for i in range(1, 5):
-        print(i)
+
         # Calculate the estimated values for the next quarter
         estimated_values = (quarterly_growth_rate ** i) * last_quarter_data
-        print(estimated_values.iloc[-1])
+
         # Scale the estimated values
         estimated_values_scaled = estimated_values.iloc[-1] * financial_data.loc[len(financial_data) - 1, "totalAssets"] / 100
-        print("HERERERE")
-        #print(last_quarter_data)
-        #print(estimated_values_scaled.shape)
-        #print(average_percentage_df.columns)
+
         # Create a new DataFrame row with the estimated values
         new_row = estimated_values_scaled.to_frame().transpose()
-        #print(new_row)
-
         # Calculate the new date, adding 3 months for each future quarter
         # Ensure 'date' in financial_data is a datetime object
         financial_data['date'] = pd.to_datetime(financial_data['date'])
 
         # Now you can add the DateOffset
         new_date = financial_data['date'].iloc[-1] + DateOffset(months=3 * i)
-        #print(new_date)
+
 
 
         # Assign the new date to the new_row 'date' column
         new_row['date'] = new_date
-        #print(new_row)
+
         # Append the new row to the list of new_rows
         new_rows.append(new_row)
 
     # Concatenate the new rows with the original financial_data DataFrame
-    #print(new_rows)
+
     updated_financial_data = pd.concat([financial_data] + new_rows, ignore_index=True)
    
     return updated_financial_data
@@ -188,6 +179,21 @@ def fetch_daily_market_cap_dataframe(api_key, symbol):
     market_cap_df = market_cap_df[['date', 'marketCap']]
     market_cap_df['date'] = pd.to_datetime(market_cap_df['date'])
     return market_cap_df
+
+
+
+# Function to convert the DataFrame to an Excel byte stream
+def to_excel(df):
+    output = BytesIO()
+    writer = pd.ExcelWriter(output, engine='xlsxwriter')
+    df.to_excel(writer, index=False, sheet_name='Sheet1')
+    writer.save()
+    processed_data = output.getvalue()
+    return processed_data
+
+# Create a button to download the data
+
+
 
 
 # Initialize the Streamlit app
@@ -224,7 +230,6 @@ if ticker_symbol:
         yearly_growth = estimate_next_year_growth(averages)
         updated_financial_data = estimate_next_year_metrics(averages,financial_data, yearly_growth, allow_input)
         
-        #print(updated_financial_data)
         if st.button('Calculate FFO and Price/FFO'):
             # Calculate the FFO
             ffo = calculate_ttm_ffo(financial_data, selected_date)
@@ -237,7 +242,13 @@ if ticker_symbol:
             st.write(f"The Price/FFO ratio for {ticker_symbol} as of {selected_date} is: {price_ffo_ratio:.2f}")
             
             estimated_ffo = calculate_estimated_ttm_ffo(updated_financial_data, updated_financial_data['date'].iloc[-1])
-            st.write(estimated_ffo)
+            st.write(f"The FFO for {ticker_symbol} on a 1 year forward looking basis, using the estimates in the sidebar, starting from {selected_date} is: ${estimated_ffo:,.2f}")
+        if st.button('Download Data as Excel'):
+            tmp_download_link = to_excel(financial_data)
+            st.download_button(label='📥 Download Current Result',
+                            data=tmp_download_link,
+                            file_name='financial_data.xlsx',
+                            mime='application/vnd.ms-excel')
     else:
         st.error('No financial data found for the given ticker symbol.')
 else:
