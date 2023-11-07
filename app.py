@@ -81,7 +81,10 @@ def calculate_average_percentage_change(financial_data, metric):
     ttm_metrics = financial_data[['netIncome', 'depreciationAndAmortization', 'netCashUsedForInvestingActivites']].rolling(window=4).sum()
     ttm_metrics[['revenue', 'totalAssets']] = financial_data[['revenue', 'totalAssets']]
     # Calculate the TTM metric as a percentage of the chosen metric
+    print("start")
+    print(ttm_metrics)
     ttm_metrics_percentage = ttm_metrics.div(ttm_metrics[metric], axis=0) * 100
+    print(ttm_metrics_percentage)
     # Calculate the average percentage
     average_percentage = ttm_metrics_percentage.rolling(window=4).mean()
     return average_percentage
@@ -89,9 +92,12 @@ def calculate_average_percentage_change(financial_data, metric):
 def estimate_next_year_growth(average_percentage_df):
 
         # Calculate quarter-over-quarter percentage change
+    print(average_percentage_df)
     qoq_change = average_percentage_df.pct_change()
+    print(qoq_change)
     # Calculate the average percentage change for each component
     avg_yoy_change = qoq_change.rolling(window=4).mean()
+    print(avg_yoy_change)
     return avg_yoy_change
 
 def estimate_next_year_metrics(average_percentage_df,financial_data, avg_yoy_change, allow_input = False):
@@ -130,7 +136,7 @@ def estimate_next_year_metrics(average_percentage_df,financial_data, avg_yoy_cha
     ttm_metrics = financial_data[['netIncome', 'depreciationAndAmortization', 'netCashUsedForInvestingActivites']].rolling(window=4).sum()
     ttm_metrics[['revenue', 'totalAssets']] = financial_data[['revenue', 'totalAssets']]
     # Calculate the TTM metric as a percentage of the chosen metric
-    ttm_metrics_percentage = ttm_metrics.div(ttm_metrics[metric], axis=0) * 100
+    ttm_metrics_percentage = ttm_metrics.div(ttm_metrics["totalAssets"], axis=0) * 100
     # Calculate the average percentage
     last_quarter_data = ttm_metrics_percentage
 
